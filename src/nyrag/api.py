@@ -76,12 +76,14 @@ def _load_settings() -> Dict[str, Any]:
     if config_path and Path(config_path).exists():
         cfg = Config.from_yaml(config_path)
         rag_params = cfg.rag_params or {}
+        llm_params = cfg.llm_params
         return {
             "app_package_name": cfg.get_app_package_name(),
             "schema_name": cfg.get_schema_name(),
             "embedding_model": rag_params.get("embedding_model", DEFAULT_EMBEDDING_MODEL),
             "vespa_url": vespa_url,
             "vespa_port": vespa_port,
+            "llm_params": llm_params,
         }
 
     return {
@@ -90,6 +92,7 @@ def _load_settings() -> Dict[str, Any]:
         "embedding_model": os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
         "vespa_url": vespa_url,
         "vespa_port": vespa_port,
+        "llm_params": None,
     }
 
 
@@ -278,6 +281,52 @@ async def _fetch_chunks_async(query: str, hits: int, k: int) -> List[Dict[str, A
 
 
 def _get_openrouter_client() -> AsyncOpenAI:
+    """Get an OpenAI-compatible client based on configuration or environment."""
+    llm_params = settings.get("llm_params")
+    
+    # If llm_params is configured, use it
+    if llm_params:
+        provider = llm_params.provider
+        model_id = llm_params.model
+        base_url = llm_params.base_url
+        api_key = llm_params.api_key
+        
+        # Set provider-specific defaults
+        if provider == "ollama":
+            base_url = base_url or "http://localhost:11434/v1"
+            api_key = api_key or "ollama"  # Ollama doesn't need a real API key
+        elif provider == "openai-compatible":
+            if not base_url:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="base_url is required for openai-compatible provider"
+                )
+            api_key = api_key or "dummy-key"  # Some endpoints don't require a key
+        else:  # openrouter
+            base_url = base_url or os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+            api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not set")
+        
+        default_headers = {}
+        # Add OpenRouter-specific headers if using OpenRouter
+        if provider == "openrouter":
+            referer = os.getenv("OPENROUTER_REFERRER")
+            if referer:
+                default_headers["HTTP-Referer"] = referer
+            title = os.getenv("OPENROUTER_TITLE")
+            if title:
+                default_headers["X-Title"] = title
+        
+        return AsyncOpenAI(
+            base_url=base_url, 
+            api_key=api_key, 
+            default_headers=default_headers or None,
+            timeout=llm_params.timeout,
+            max_retries=llm_params.max_retries or 2,
+        )
+    
+    # Fallback to environment variables (OpenRouter by default)
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not set")
@@ -290,6 +339,24 @@ def _get_openrouter_client() -> AsyncOpenAI:
     if title:
         default_headers["X-Title"] = title
     return AsyncOpenAI(base_url=base_url, api_key=api_key, default_headers=default_headers or None)
+
+
+def _get_model_id(override_model: Optional[str] = None) -> str:
+    """Get the model ID from config, override, or environment."""
+    if override_model:
+        return override_model
+    
+    llm_params = settings.get("llm_params")
+    if llm_params and llm_params.model:
+        return llm_params.model
+    
+    model = os.getenv("OPENROUTER_MODEL")
+    if not model:
+        raise HTTPException(
+            status_code=500, 
+            detail="Model not specified. Set model in llm_params config or OPENROUTER_MODEL env var"
+        )
+    return model
 
 
 def _extract_message_text(content: Any) -> str:
@@ -595,7 +662,7 @@ async def _openrouter_stream(
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> Dict[str, Any]:
-    model_id = req.model or os.getenv("OPENROUTER_MODEL")
+    model_id = _get_model_id(req.model)
     queries, chunks = await _fuse_chunks(
         await _prepare_queries(req.message, model_id, req.query_k, hits=req.hits, k=req.k),
         hits=req.hits,
@@ -609,7 +676,7 @@ async def chat(req: ChatRequest) -> Dict[str, Any]:
 
 @app.post("/chat-stream")
 async def chat_stream(req: ChatRequest):
-    model_id = req.model or os.getenv("OPENROUTER_MODEL")
+    model_id = _get_model_id(req.model)
 
     async def event_stream():
         yield f"data: {json.dumps({'type': 'status', 'payload': 'Generating search queries...'})}\n\n"

@@ -1,0 +1,34 @@
+name: localrag
+mode: web
+start_loc: https://example.com/
+exclude:
+  - https://example.com/admin/*
+
+# Optional: Web crawling specific parameters
+crawl_params:
+  respect_robots_txt: true
+  follow_subdomains: true
+  user_agent_type: chrome
+
+# Optional: General parameters for downstream RAG processing
+rag_params:
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+  embedding_dim: 384
+  chunk_size: 1024
+  chunk_overlap: 50
+  distance_metric: angular
+  max_tokens: 8192
+
+# LLM configuration for TRUE LOCAL RAG with Ollama
+llm_params:
+  provider: ollama
+  model: llama3.2:3b  # Or qwen2.5:3b, mistral:7b, etc.
+  base_url: http://localhost:11434/v1  # Default Ollama endpoint
+  timeout: 120.0  # Increase timeout for slower local models
+  max_retries: 3
+
+# To use this config:
+# 1. Install Ollama: curl -fsSL https://ollama.com/install.sh | sh
+# 2. Pull a model: ollama pull llama3.2:3b
+# 3. Run nyrag: NYRAG_LOCAL=1 nyrag --config configs/local_llm_example.yml
+# 4. Start API: NYRAG_CONFIG=configs/local_llm_example.yml uvicorn nyrag.api:app --host 0.0.0.0 --port 8000

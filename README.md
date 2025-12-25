@@ -122,10 +122,22 @@ rag_params:
 
 After crawling/processing is complete:
 
+**With OpenRouter (default):**
 ```bash
 export NYRAG_CONFIG=configs/example.yml
 export OPENROUTER_API_KEY=your-api-key
-export OPENROUTER_MODEL=openai/gpt-5.1
+export OPENROUTER_MODEL=openai/gpt-4o
+
+uvicorn nyrag.api:app --host 0.0.0.0 --port 8000
+```
+
+**With Ollama (local LLM):**
+```bash
+# Make sure Ollama is running with a model installed
+ollama pull llama3.2:3b
+
+# Start the API server with a config that specifies Ollama
+export NYRAG_CONFIG=configs/example.yml  # Config should have llm_params with provider: ollama
 
 uvicorn nyrag.api:app --host 0.0.0.0 --port 8000
 ```
@@ -163,8 +175,8 @@ After crawling/processing is complete:
 ```bash
 export NYRAG_CONFIG=configs/example.yml
 export VESPA_URL="https://<your-endpoint>.z.vespa-app.cloud"
-export OPENROUTER_API_KEY=your-api-key
-export OPENROUTER_MODEL=openai/gpt-5.1
+export OPENROUTER_API_KEY=your-api-key  # Or configure llm_params in config for local LLM
+export OPENROUTER_MODEL=openai/gpt-4o
 
 uvicorn nyrag.api:app --host 0.0.0.0 --port 8000
 ```
@@ -208,6 +220,63 @@ Open http://localhost:8000/chat
 | `distance_metric` | str | `angular` | Distance metric |
 | `max_tokens` | int | `8192` | Max tokens per document |
 
+### LLM Parameters (`llm_params`)
+
+NyRAG supports multiple LLM providers for a truly local RAG experience or cloud-based LLMs:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `provider` | str | `openrouter` | LLM provider: `openrouter`, `ollama`, or `openai-compatible` |
+| `model` | str | `None` | Model identifier (e.g., `llama3.2:3b` for Ollama) |
+| `base_url` | str | `None` | API endpoint URL (provider-specific defaults apply) |
+| `api_key` | str | `None` | API key if required |
+| `timeout` | float | `None` | Request timeout in seconds |
+| `max_retries` | int | `2` | Maximum retry attempts |
+
+#### Provider-Specific Examples
+
+**Option 1: OpenRouter (Cloud LLM)**
+```yaml
+llm_params:
+  provider: openrouter
+  model: anthropic/claude-3.5-sonnet
+  api_key: your-api-key-here  # Or use OPENROUTER_API_KEY env var
+```
+
+**Option 2: Ollama (Local LLM)**
+```yaml
+llm_params:
+  provider: ollama
+  model: llama3.2:3b  # Or any model you have installed
+  base_url: http://localhost:11434/v1  # Default Ollama endpoint
+```
+
+To use Ollama, first install and start it:
+```bash
+# Install Ollama (see https://ollama.ai)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull a model
+ollama pull llama3.2:3b
+
+# Ollama runs automatically, or start manually:
+ollama serve
+```
+
+**Option 3: OpenAI-Compatible Endpoints (llama.cpp, vLLM, LocalAI, etc.)**
+```yaml
+llm_params:
+  provider: openai-compatible
+  model: your-model-name
+  base_url: http://localhost:8080/v1
+  api_key: optional-key  # Some endpoints require this
+```
+
+Examples of OpenAI-compatible servers:
+- **llama.cpp server**: `./llama-server -m model.gguf --port 8080`
+- **vLLM**: `vllm serve model-name --port 8080`
+- **LocalAI**: Runs on `http://localhost:8080`
+
 ---
 
 ## Environment Variables
@@ -241,7 +310,9 @@ Open http://localhost:8000/chat
 |----------|-------------|
 | `NYRAG_CONFIG` | Path to config file |
 | `VESPA_URL` | Vespa endpoint URL (optional for local, required for cloud) |
-| `OPENROUTER_API_KEY` | OpenRouter API key for LLM |
-| `OPENROUTER_MODEL` | LLM model (e.g., `openai/gpt-4o`) |
+| `OPENROUTER_API_KEY` | OpenRouter API key (if using OpenRouter provider) |
+| `OPENROUTER_MODEL` | LLM model (e.g., `openai/gpt-4o`, can also be set in config) |
+
+**Note:** When using local LLMs (Ollama, llama.cpp, etc.), configure `llm_params` in your config file instead of using environment variables. Environment variables are primarily for OpenRouter.
 
 ---

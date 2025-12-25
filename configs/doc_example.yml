@@ -24,3 +24,24 @@ rag_params:
   chunk_overlap: 50
   distance_metric: angular        # Distance metric: angular, euclidean, etc. (default: angular)
   max_tokens: 8192
+
+# Optional: LLM configuration for chat/RAG
+# Option 1: OpenRouter (default if not specified, requires OPENROUTER_API_KEY env var)
+# llm_params:
+#   provider: openrouter
+#   model: anthropic/claude-3.5-sonnet  # Optional, can also use OPENROUTER_MODEL env var
+#   base_url: https://openrouter.ai/api/v1  # Optional, defaults to OpenRouter
+#   api_key: your-api-key-here     # Optional, can also use OPENROUTER_API_KEY env var
+
+# Option 2: Ollama (local LLM)
+# llm_params:
+#   provider: ollama
+#   model: llama3.2:3b             # Or any other Ollama model you have installed
+#   base_url: http://localhost:11434/v1  # Default Ollama API endpoint
+
+# Option 3: OpenAI-compatible endpoint (e.g., llama.cpp, vLLM, LocalAI, etc.)
+# llm_params:
+#   provider: openai-compatible
+#   model: your-model-name
+#   base_url: http://localhost:8080/v1
+#   api_key: optional-key          # Some endpoints require an API key

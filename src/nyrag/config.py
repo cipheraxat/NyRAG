@@ -27,6 +27,17 @@ class DocParams(BaseModel):
     file_extensions: Optional[List[str]] = None
 
 
+class LLMParams(BaseModel):
+    """Parameters for LLM configuration."""
+
+    provider: Literal["openrouter", "ollama", "openai-compatible"] = "openrouter"
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    timeout: Optional[float] = None
+    max_retries: Optional[int] = None
+
+
 class Config(BaseModel):
     """Configuration model for nyrag."""
 
@@ -37,6 +48,7 @@ class Config(BaseModel):
     rag_params: Optional[Dict[str, Any]] = None
     crawl_params: Optional[CrawlParams] = None
     doc_params: Optional[DocParams] = None
+    llm_params: Optional[LLMParams] = None
 
     @field_validator("mode")
     @classmethod
@@ -52,6 +64,8 @@ class Config(BaseModel):
             self.crawl_params = CrawlParams()
         if self.doc_params is None:
             self.doc_params = DocParams()
+        if self.llm_params is None:
+            self.llm_params = LLMParams()
 
     @classmethod
     def from_yaml(cls, yaml_path: str) -> "Config":
